@@ -6,12 +6,9 @@ from desdeo_emo.population.Population import Population
 from desdeo_emo.othertools.ReferenceVectors import ReferenceVectors
 
 
-class APD_Select(SelectionBase):
-    """The selection operator for the RVEA algorithm. Read the following paper for more
-        details.
-        R. Cheng, Y. Jin, M. Olhofer and B. Sendhoff, A Reference Vector Guided
-        Evolutionary Algorithm for Many-objective Optimization, IEEE Transactions on
-        Evolutionary Computation, 2016
+class NIMBUS_APD_Select(SelectionBase):
+    """The selection operator for the NIMBUS-RVEA algorithm.
+
     Parameters
     ----------
     pop : Population
@@ -23,13 +20,19 @@ class APD_Select(SelectionBase):
     """
 
     def __init__(
-        self, pop: Population, time_penalty_function: Callable, alpha: float = 2
+        self,
+        time_penalty_function: Callable,
+        scalarization_methods: List,
+        alpha: float = 2,
     ):
         self.time_penalty_function = time_penalty_function
-        self.alpha = alpha
-        self.n_of_objectives = pop.problem.n_of_objectives
+        self.alpha = 2
+        self.n_of_objectives = len(scalarization_methods)
+        self.scalarization_methods = scalarization_methods
 
-    def do(self, pop: Population, vectors: ReferenceVectors) -> List[int]:
+    def do(
+        self, pop: Population, vectors: ReferenceVectors, reference_point: np.ndarray
+    ) -> List[int]:
         """Select individuals for mating on basis of Angle penalized distance.
 
         Parameters
@@ -46,16 +49,18 @@ class APD_Select(SelectionBase):
         """
         partial_penalty_factor = self._partial_penalty_factor()
         refV = vectors.neighbouring_angles_current
-        # Normalization - There may be problems here
-        if pop.ideal_fitness_val is not None:
-            fmin = pop.ideal_fitness_val
-        else:
-            fmin = np.amin(pop.fitness, axis=0)
-        translated_fitness = pop.fitness - fmin
+        fitness = np.asarray(
+            [
+                scalar(pop.fitness, reference_point)
+                for scalar in self.scalarization_methods
+            ]
+        ).T
+        fmin = np.amin(fitness, axis=0)
+        translated_fitness = fitness - fmin
         fitness_norm = np.linalg.norm(translated_fitness, axis=1)
         # TODO check if you need the next line
         fitness_norm = np.repeat(fitness_norm, len(translated_fitness[0, :])).reshape(
-            len(pop.fitness), len(pop.fitness[0, :])
+            len(fitness), len(fitness[0, :])
         )
         # Convert zeros to eps to avoid divide by zero.
         # Has to be checked!
@@ -117,9 +122,7 @@ class APD_Select(SelectionBase):
         float
             The partial penalty value
         """
-        penalty = (
-            (self.time_penalty_function()) ** self.alpha
-        ) * self.n_of_objectives
+        penalty = ((self.time_penalty_function()) ** self.alpha) * self.n_of_objectives
         if penalty < 0:
             penalty = 0
         if penalty > 1:

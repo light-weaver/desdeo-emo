@@ -1,12 +1,21 @@
-from typing import Dict, Union
+from typing import Dict, Union, List
 
-from desdeo_emo.EAs.BaseEA import BaseDecompositionEA, eaError
+from desdeo_emo.EAs.BaseEA import eaError
+from desdeo_emo.EAs.RVEA import RVEA
 from desdeo_emo.population.Population import Population
-from desdeo_emo.selection.APD_Select import APD_Select
+from desdeo_emo.selection.NIMBUS_APD import NIMBUS_APD_Select
 from desdeo_problem.Problem import MOProblem
+from desdeo_tools.scalarization import StomASF, PointMethodASF
+from desdeo_emo.othertools.ReferenceVectors import ReferenceVectors
+from desdeo_tools.interaction import (
+    ReferencePointPreference,
+    validate_ref_point_with_ideal_and_nadir,
+)
+import numpy as np
+import pandas as pd
 
 
-class RVEA(BaseDecompositionEA):
+class NIMBUS_RVEA(RVEA):
     """The python version reference vector guided evolutionary algorithm.
 
     Most of the relevant code is contained in the super class. This class just assigns
@@ -90,18 +99,37 @@ class RVEA(BaseDecompositionEA):
         initial_population: Population = None,
         alpha: float = None,
         lattice_resolution: int = None,
-        a_priori: bool = False,
-        interact: bool = False,
         n_iterations: int = 10,
         n_gen_per_iter: int = 100,
         total_function_evaluations: int = 0,
         time_penalty_component: Union[str, float] = None,
     ):
+        a_priori: bool = True
+        interact: bool = True
+        if problem.ideal is None or problem.nadir is None:
+            msg = (
+                f"The problem instance should contain the information about ideal and "
+                f"nadir point."
+            )
+            raise eaError(msg)
+
+        lattice_res_options = [49, 13, 7, 5, 4, 3, 3, 3, 3]
+        reference_vectors = ReferenceVectors(
+            lattice_resolution=lattice_res_options[2 - 2], number_of_objectives=2
+        )
+        population_size = reference_vectors.number_of_vectors
+        population = Population(problem, population_size, population_params)
+        scalarization_methods = [
+            StomASF(ideal=population.ideal_fitness_val),
+            PointMethodASF(
+                nadir=population.nadir_fitness_val, ideal=population.ideal_fitness_val
+            ),
+        ]
         super().__init__(
             problem=problem,
             population_size=population_size,
             population_params=population_params,
-            initial_population=initial_population,
+            initial_population=population,
             lattice_resolution=lattice_resolution,
             a_priori=a_priori,
             interact=interact,
@@ -109,48 +137,10 @@ class RVEA(BaseDecompositionEA):
             n_gen_per_iter=n_gen_per_iter,
             total_function_evaluations=total_function_evaluations,
         )
-        self.time_penalty_component = time_penalty_component
-        time_penalty_component_options = ["original", "function_count", "interactive"]
-        if time_penalty_component is None:
-            if interact is True:
-                time_penalty_component = "interactive"
-            elif total_function_evaluations > 0:
-                time_penalty_component = "function_count"
-            else:
-                time_penalty_component = "original"
-        if not (type(time_penalty_component) is float or str):
-            msg = (
-                f"type(time_penalty_component) should be float or str"
-                f"Provided type: {type(time_penalty_component)}"
-            )
-            eaError(msg)
-        if type(time_penalty_component) is float:
-            if (time_penalty_component <= 0) or (time_penalty_component >= 1):
-                msg = (
-                    f"time_penalty_component should either be a float in the range"
-                    f"[0, 1], or one of {time_penalty_component_options}.\n"
-                    f"Provided value = {time_penalty_component}"
-                )
-                eaError(msg)
-            time_penalty_function = self._time_penalty_constant
-        if type(time_penalty_component) is str:
-            if time_penalty_component == "original":
-                time_penalty_function = self._time_penalty_original
-            elif time_penalty_component == "function_count":
-                time_penalty_function = self._time_penalty_function_count
-            elif time_penalty_component == "interactive":
-                time_penalty_function = self._time_penalty_interactive
-            else:
-                msg = (
-                    f"time_penalty_component should either be a float in the range"
-                    f"[0, 1], or one of {time_penalty_component_options}.\n"
-                    f"Provided value = {time_penalty_component}"
-                )
-                eaError(msg)
-        self.time_penalty_function = time_penalty_function
-        self.alpha = alpha
-        selection_operator = APD_Select(
-            self.population, self.time_penalty_function, alpha
+        self.reference_vectors = reference_vectors
+        self.scalarization_methods = scalarization_methods
+        selection_operator = NIMBUS_APD_Select(
+            self.time_penalty_function, self.scalarization_methods, self.alpha
         )
         self.selection_operator = selection_operator
 
@@ -173,3 +163,71 @@ class RVEA(BaseDecompositionEA):
         """Calculates the appropriate time penalty value.
         """
         return self._function_evaluation_count / self.total_function_evaluations
+
+    def _select(self) -> List:
+        return self.selection_operator.do(
+            self.population, self.reference_vectors, self._preference
+        )
+
+    def manage_preferences(self, preference=None):
+        """Run the interruption phase of EA.
+
+        Use this phase to make changes to RVEA.params or other objects.
+        Updates Reference Vectors (adaptation), conducts interaction with the user.
+        """
+        if preference is None:
+            msg = "Giving preferences is mandatory"
+            raise eaError(msg)
+
+        if not isinstance(preference, ReferencePointPreference):
+            msg = (
+                f"Wrong object sent as preference. Expected type = "
+                f"{type(ReferencePointPreference)} or None\n"
+                f"Recieved type = {type(preference)}"
+            )
+            raise eaError(msg)
+
+        if preference.request_id != self._interaction_request_id:
+            msg = (
+                f"Wrong preference object sent. Expected id = "
+                f"{self._interaction_request_id}.\n"
+                f"Recieved id = {preference.request_id}"
+            )
+            raise eaError(msg)
+
+        refpoint = preference.response.values * self.population.problem._max_multiplier
+        self._preference = refpoint
+        scalarized_space_fitness = np.asarray(
+            [
+                scalar(self.population.fitness, self._preference)
+                for scalar in self.scalarization_methods
+            ]
+        ).T
+        self.reference_vectors.adapt(scalarized_space_fitness)
+        self.reference_vectors.neighbouring_angles()
+
+    def request_preferences(self) -> Union[None, ReferencePointPreference]:
+        dimensions_data = pd.DataFrame(
+            index=["minimize", "ideal", "nadir"],
+            columns=self.population.problem.get_objective_names(),
+        )
+        dimensions_data.loc["minimize"] = self.population.problem._max_multiplier
+        dimensions_data.loc["ideal"] = self.population.ideal_objective_vector
+        dimensions_data.loc["nadir"] = self.population.nadir_objective_vector
+        message = (
+            f"Provide a reference point worse than to the ideal point and better than"
+            f" the nadir point.\n"
+            f"Ideal point: \n{dimensions_data.loc['ideal']}\n"
+            f"Nadir point: \n{dimensions_data.loc['nadir']}\n"
+            f"The reference point will be used to create scalarization functions in "
+            f"the preferred region.\n"
+        )
+        interaction_priority = "recommended"
+        self._interaction_request_id = np.random.randint(0, 1e10)
+        return ReferencePointPreference(
+            dimensions_data=dimensions_data,
+            message=message,
+            interaction_priority=interaction_priority,
+            preference_validator=validate_ref_point_with_ideal_and_nadir,
+            request_id=self._interaction_request_id,
+        )
