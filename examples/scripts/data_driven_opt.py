@@ -12,8 +12,10 @@ from pyDOE import lhs
 
 from desdeo_emo.EAs.RVEA import RVEA, oRVEA, robust_RVEA
 
+from pygmo import non_dominated_front_2d as nd2
 
-problem_names = ["ZDT4", "ZDT6"]
+
+problem_names = ["ZDT1", "ZDT2", "ZDT3", "ZDT4", "ZDT6"]
 num_var = {"ZDT1": 30, "ZDT2": 30, "ZDT3": 30, "ZDT4": 10, "ZDT6": 10}
 
 for problem_name in problem_names:
@@ -21,6 +23,9 @@ for problem_name in problem_names:
 
     x = lhs(num_var[problem_name], 250)
     y = prob.evaluate(x)
+
+    data_pareto = nd2(y.objectives)
+    data_pareto = y.objectives[data_pareto]
 
     x_names = [f"x{i}" for i in range(1, num_var[problem_name] + 1)]
     y_names = ["f1", "f2"]
@@ -79,6 +84,9 @@ for problem_name in problem_names:
     plt.clf()
     # Plot 1
     true = plt.scatter(x=front_true[:, 0], y=front_true[:, 1], label="True Front")
+    from_data = plt.scatter(
+        x=data_pareto[:, 0], y=data_pareto[:, 1], label="Front from data"
+    )
     L = plt.scatter(x=front_L[:, 0], y=front_L[:, 1], label="Lipshitzian")
     L_opt = plt.scatter(
         x=front_L_opt[:, 0], y=front_L_opt[:, 1], label="Optimistic Lipschitzian"
@@ -117,6 +125,9 @@ for problem_name in problem_names:
     plt.clf()
     # Plot 2
     true = plt.scatter(x=front_true[:, 0], y=front_true[:, 1], label="True Front")
+    from_data = plt.scatter(
+        x=data_pareto[:, 0], y=data_pareto[:, 1], label="Front from data"
+    )
     L = plt.scatter(x=front_L[:, 0], y=front_L[:, 1], label="Lipshitzian")
     L_opt = plt.scatter(
         x=front_L_opt[:, 0], y=front_L_opt[:, 1], label="Optimistic Lipschitzian"
