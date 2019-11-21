@@ -95,6 +95,7 @@ class BaseDecompositionEA(BaseEA):
         lattice_resolution: int = None,
         a_priori: bool = False,
         interact: bool = False,
+        use_surrogates: bool = False,
         n_iterations: int = 10,
         n_gen_per_iter: int = 100,
         total_function_evaluations: int = 0,
@@ -113,7 +114,9 @@ class BaseDecompositionEA(BaseEA):
         elif initial_population is None:
             if population_size is None:
                 population_size = self.reference_vectors.number_of_vectors
-            self.population = Population(problem, population_size, population_params)
+            self.population = Population(
+                problem, population_size, population_params, use_surrogates
+            )
         self.a_priori: bool = a_priori
         self.interact: bool = interact
         self.n_iterations: int = n_iterations
@@ -121,6 +124,7 @@ class BaseDecompositionEA(BaseEA):
         self.total_gen_count: int = n_gen_per_iter * n_iterations
         self.total_function_evaluations = total_function_evaluations
         self.selection_operator = selection_operator
+        self.use_surrogates: bool = use_surrogates
         # Internal counters and state trackers
         self._iteration_counter: int = 0
         self._gen_count_in_curr_iteration: int = 0
@@ -148,7 +152,7 @@ class BaseDecompositionEA(BaseEA):
         next_iteration.
         """
         offspring = self.population.mate()  # (params=self.params)
-        self.population.add(offspring)
+        self.population.add(offspring, self.use_surrogates)
         selected = self._select()
         self.population.keep(selected)
         self._current_gen_count += 1
