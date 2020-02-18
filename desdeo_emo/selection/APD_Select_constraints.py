@@ -23,11 +23,21 @@ class APD_Select(SelectionBase):
     """
 
     def __init__(
-        self, pop: Population, time_penalty_function: Callable, alpha: float = 2
+        self,
+        pop: Population,
+        time_penalty_function: Callable,
+        alpha: float = 2,
+        selection_type: str = None,
     ):
         self.time_penalty_function = time_penalty_function
+        if alpha is None:
+            alpha = 2
         self.alpha = alpha
         self.n_of_objectives = pop.problem.n_of_objectives
+        if selection_type is None:
+            selection_type = "mean"
+        self.selection_type = selection_type
+        self.ideal: np.ndarray = pop.ideal_fitness_val
 
     def do(self, pop: Population, vectors: ReferenceVectors) -> List[int]:
         """Select individuals for mating on basis of Angle penalized distance.
@@ -47,15 +57,17 @@ class APD_Select(SelectionBase):
         partial_penalty_factor = self._partial_penalty_factor()
         refV = vectors.neighbouring_angles_current
         # Normalization - There may be problems here
-        if pop.ideal_fitness_val is not None:
-            fmin = pop.ideal_fitness_val
-        else:
-            fmin = np.amin(pop.fitness, axis=0)
-        translated_fitness = pop.fitness - fmin
+        fitness = self._calculate_fitness(pop)
+        fmin = np.amin(fitness, axis=0)
+        self.ideal = np.amin(
+            np.vstack((self.ideal, fmin, pop.ideal_fitness_val)), axis=0
+        )
+        translated_fitness = fitness - self.ideal
         fitness_norm = np.linalg.norm(translated_fitness, axis=1)
         # TODO check if you need the next line
+        # TODO changing the order of the following few operations might be efficient
         fitness_norm = np.repeat(fitness_norm, len(translated_fitness[0, :])).reshape(
-            len(pop.fitness), len(pop.fitness[0, :])
+            len(fitness), len(fitness[0, :])
         )
         # Convert zeros to eps to avoid divide by zero.
         # Has to be checked!
@@ -72,7 +84,7 @@ class APD_Select(SelectionBase):
             cosine[np.where(cosine < 0)] = 0
         # Calculation of angles between reference vectors and solutions
         theta = np.arccos(cosine)
-        # Reference vector asub_population_indexssignment
+        # Reference vector assignment
         assigned_vectors = np.argmax(cosine, axis=1)
         selection = np.array([], dtype=int)
         # Selection
@@ -83,8 +95,34 @@ class APD_Select(SelectionBase):
             sub_population_index = np.atleast_1d(
                 np.squeeze(np.where(assigned_vectors == i))
             )
+
+            # Constraint check
+            if len(sub_population_index) > 1 and pop.constraint is not None:
+                violation_values = pop.constraint[sub_population_index]
+                # violation_values = -violation_values
+                violation_values = np.maximum(0, violation_values)
+                # True if feasible
+                feasible_bool = (violation_values == 0).all(axis=1)
+
+                # Case when entire subpopulation is infeasible
+                if (feasible_bool == False).all():
+                    violation_values = violation_values.sum(axis=1)
+                    sub_population_index = sub_population_index[
+                        np.where(violation_values == violation_values.min())
+                    ]
+                # Case when only some are infeasible
+                else:
+                    sub_population_index = sub_population_index[feasible_bool]
+
             sub_population_fitness = translated_fitness[sub_population_index]
-            if len(sub_population_fitness > 0):
+            # fast tracking singly selected individuals
+            if len(sub_population_index) == 1:
+                selx = sub_population_index
+                if selection.shape[0] == 0:
+                    selection = np.hstack((selection, np.transpose(selx[0])))
+                else:
+                    selection = np.vstack((selection, np.transpose(selx[0])))
+            elif len(sub_population_index) > 1:
                 # APD Calculation
                 angles = theta[sub_population_index, i]
                 angles = np.divide(angles, refV[i])  # This is correct.
@@ -123,3 +161,11 @@ class APD_Select(SelectionBase):
         if penalty > 1:
             penalty = 1
         return penalty
+
+    def _calculate_fitness(self, pop) -> np.ndarray:
+        if self.selection_type == "mean":
+            return pop.fitness
+        if self.selection_type == "optimistic":
+            return pop.fitness - pop.uncertainity
+        if self.selection_type == "robust":
+            return pop.fitness + pop.uncertainity

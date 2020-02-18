@@ -18,7 +18,7 @@ class BasePopulation(ABC):
         self.uncertainity: np.ndarray = None
         self.fitness: np.ndarray = None
         if not problem.n_of_constraints == 0:
-            self.constraint_violation = None
+            self.constraint = None
         self.ideal_objective_vector = problem.ideal
         self.nadir_objective_vector = problem.nadir
         self.ideal_fitness_val = None
@@ -125,6 +125,9 @@ class Population(BasePopulation):
         ----------
         offsprings : Union[List, np.ndarray]
             List or array of individuals to be evaluated and added to the population.
+        
+        use_surrogates: bool
+            If true, use surrogate models rather than true function evaluations.
 
         use_surrogates: bool
             If true, use surrogate models rather than true function evaluations.
@@ -143,17 +146,22 @@ class Population(BasePopulation):
             self.individuals = offsprings
             self.objectives = objectives
             self.fitness = fitness
-            self.constraint_violation = constraints
+            self.constraint = constraints
             self.uncertainity = uncertainity
             first_offspring_index = 0
         else:
             first_offspring_index = self.individuals.shape[0]
-            self.individuals = np.vstack((self.individuals, offsprings))
+            if self.individuals.ndim - offsprings.ndim == 1:
+                self.individuals = np.vstack((self.individuals, [offsprings]))
+            elif self.individuals.ndim == offsprings.ndim:
+                self.individuals = np.vstack((self.individuals, offsprings))
+            else:
+                pass  # TODO raise error
             self.objectives = np.vstack((self.objectives, objectives))
             self.fitness = np.vstack((self.fitness, fitness))
             if self.problem.n_of_constraints != 0:
-                self.constraint_violation = np.vstack(
-                    (self.constraint_violation, constraints)
+                self.constraint = np.vstack(
+                    (self.constraint, constraints)
                 )
             self.uncertainity = np.vstack((self.uncertainity, uncertainity))
         last_offspring_index = self.individuals.shape[0]
@@ -177,7 +185,7 @@ class Population(BasePopulation):
         self.fitness = self.fitness[mask]
         self.uncertainity = self.uncertainity[mask]
         if self.problem.n_of_constraints > 0:
-            self.constraint_violation = self.constraint_violation[mask]
+            self.constraint = self.constraint[mask]
 
     def delete(self, indices: List):
         """Delete the population members given by the list of indices for the next
@@ -191,11 +199,13 @@ class Population(BasePopulation):
         mask = np.ones(self.individuals.shape[0], dtype=bool)
         mask[indices] = False
         self.individuals = self.individuals[mask]
+        if len(self.individuals) == 0:
+            self.individuals = None
         self.objectives = self.objectives[mask]
         self.fitness = self.fitness[mask]
-        sself.uncertainity = self.uncertainity[mask]
+        self.uncertainity = self.uncertainity[mask]
         if self.problem.n_of_constraints > 0:
-            self.constraint_violation = self.constraint_violation[mask]
+            self.constraint = self.constraint[mask]
 
     def mate(self, mating_individuals: List = None) -> Union[List, np.ndarray]:
         """Perform crossover and mutation over the population members.
