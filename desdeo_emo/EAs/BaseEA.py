@@ -154,7 +154,6 @@ class BaseDecompositionEA(BaseEA):
         initial_population: Population = None,
         a_priori: bool = False,
         interact: bool = False,
-        use_surrogates: bool = False,
         n_iterations: int = 10,
         n_gen_per_iter: int = 100,
         total_function_evaluations: int = 0,

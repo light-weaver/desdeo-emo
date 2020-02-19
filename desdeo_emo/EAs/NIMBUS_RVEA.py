@@ -5,7 +5,7 @@ from desdeo_emo.EAs.RVEA import RVEA
 from desdeo_emo.population.Population import Population
 from desdeo_emo.selection.NIMBUS_APD import NIMBUS_APD_Select
 from desdeo_problem.Problem import MOProblem
-from desdeo_tools.scalarization import StomASF, PointMethodASF
+from desdeo_tools.scalarization import StomASF, PointMethodASF, AugmentedGuessASF
 from desdeo_emo.othertools.ReferenceVectors import ReferenceVectors
 from desdeo_tools.interaction import (
     ReferencePointPreference,
@@ -123,6 +123,11 @@ class NIMBUS_RVEA(RVEA):
             StomASF(ideal=population.ideal_fitness_val),
             PointMethodASF(
                 nadir=population.nadir_fitness_val, ideal=population.ideal_fitness_val
+            ),
+            AugmentedGuessASF(
+                nadir=population.nadir_fitness_val,
+                ideal=population.ideal_fitness_val,
+                indx_to_exclude=[],
             ),
         ]
         super().__init__(
