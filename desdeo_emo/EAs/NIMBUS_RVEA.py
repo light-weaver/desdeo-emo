@@ -114,22 +114,25 @@ class NIMBUS_RVEA(RVEA):
             raise eaError(msg)
 
         lattice_res_options = [49, 13, 7, 5, 4, 3, 3, 3, 3]
-        reference_vectors = ReferenceVectors(
-            lattice_resolution=lattice_res_options[2 - 2], number_of_objectives=2
-        )
-        population_size = reference_vectors.number_of_vectors
-        population = Population(problem, population_size, population_params)
         scalarization_methods = [
-            StomASF(ideal=population.ideal_fitness_val),
+            StomASF(ideal=problem.ideal * problem._max_multiplier),
             PointMethodASF(
-                nadir=population.nadir_fitness_val, ideal=population.ideal_fitness_val
+                nadir=problem.nadir * problem._max_multiplier,
+                ideal=problem.ideal * problem._max_multiplier,
             ),
             AugmentedGuessASF(
-                nadir=population.nadir_fitness_val,
-                ideal=population.ideal_fitness_val,
+                nadir=problem.nadir * problem._max_multiplier,
+                ideal=problem.ideal * problem._max_multiplier,
                 indx_to_exclude=[],
             ),
         ]
+        reference_vectors = ReferenceVectors(
+            lattice_resolution=lattice_res_options[len(scalarization_methods) - 2],
+            number_of_objectives=len(scalarization_methods),
+        )
+        population_size = reference_vectors.number_of_vectors
+        population = Population(problem, population_size, population_params)
+
         super().__init__(
             problem=problem,
             population_size=population_size,
