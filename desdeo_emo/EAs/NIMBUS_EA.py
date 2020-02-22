@@ -4,6 +4,7 @@ from desdeo_emo.EAs.BaseEA import eaError
 from desdeo_emo.EAs.RVEA import RVEA
 from desdeo_emo.population.Population import Population
 from desdeo_emo.selection.NIMBUS_APD import NIMBUS_APD_Select
+from desdeo_emo.selection.NIMBUS_NSGAIII import NIMBUS_NSGAIII_select
 from desdeo_problem.Problem import MOProblem
 from desdeo_tools.scalarization import StomASF, PointMethodASF, AugmentedGuessASF
 from desdeo_emo.othertools.ReferenceVectors import ReferenceVectors
@@ -239,3 +240,31 @@ class NIMBUS_RVEA(RVEA):
             preference_validator=validate_ref_point_with_ideal_and_nadir,
             request_id=self._interaction_request_id,
         )
+
+
+class NIMBUS_NSGAIII(NIMBUS_RVEA):
+    def __init__(
+        self,
+        problem: MOProblem,
+        population_size: int = None,
+        population_params: Dict = None,
+        initial_population: Population = None,
+        lattice_resolution: int = None,
+        n_iterations: int = 10,
+        n_gen_per_iter: int = 100,
+        total_function_evaluations: int = 0,
+    ):
+        super().__init__(
+            problem=problem,
+            population_size=population_size,
+            population_params=population_params,
+            initial_population=initial_population,
+            lattice_resolution=lattice_resolution,
+            n_iterations=n_iterations,
+            n_gen_per_iter=n_gen_per_iter,
+            total_function_evaluations=total_function_evaluations,
+        )
+        self.selection_operator = NIMBUS_NSGAIII_select(
+            self.scalarization_methods, self.population
+        )
+
