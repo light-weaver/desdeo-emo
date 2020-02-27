@@ -3,7 +3,7 @@ import pandas as pd
 
 from desdeo_problem.testproblems.TestProblems import test_problem_builder
 
-from desdeo_emo.EAs.NIMBUS_RVEA import NIMBUS_RVEA
+from desdeo_emo.EAs.NIMBUS_EA import NIMBUS_RVEA
 
 
 # In[3]:
