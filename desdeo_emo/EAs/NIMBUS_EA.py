@@ -51,10 +51,10 @@ class BaseNIMBUSDecompositionEA(BaseDecompositionEA, BaseEA):
 
         scalarization_methods = [
             StomASF(ideal=problem.ideal * problem._max_multiplier),
-            PointMethodASF(
-                nadir=problem.nadir * problem._max_multiplier,
-                ideal=problem.ideal * problem._max_multiplier,
-            ),
+            # PointMethodASF(
+            #     nadir=problem.nadir * problem._max_multiplier,
+            #     ideal=problem.ideal * problem._max_multiplier,
+            # ),
             AugmentedGuessASF(
                 nadir=problem.nadir * problem._max_multiplier,
                 ideal=problem.ideal * problem._max_multiplier,
