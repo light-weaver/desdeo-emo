@@ -22,7 +22,7 @@ scikit-learn = "^0.21.2"
 # numpydoc = "^0.9.1"
 plotly = "^4.1"
 desdeo-tools = "^0.2.0"
-desdeo-problem = "^0.11.0"
+desdeo-problem = "^0.13.0"
 
 
 [tool.poetry.dev-dependencies]
@@ -35,6 +35,7 @@ pylint = "^2.3"
 mypy = "^0.701.0"
 jupyter = "^1.0"
 seaborn = "^0.9.0"
+tqdm = "^4.43.0"
 
 
 [build-system]
