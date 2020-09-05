@@ -143,7 +143,7 @@ class BaseNIMBUSDecompositionEA(BaseDecompositionEA, BaseEA):
             f"the preferred region.\n"
         )
         interaction_priority = "required"
-        self._interaction_request_id = np.random.randint(0, 1e10)
+        self._interaction_request_id = np.random.randint(0, 1e7)
         return ReferencePointPreference(
             dimensions_data=dimensions_data,
             message=message,
